@@ -20,8 +20,10 @@ Usage:
 
 The commands are:
 
-	apply       applies a campaign spec to create or update a campaign
-	validate    validates a campaign spec
+	apply                 applies a campaign spec to create or update a campaign
+	repos,repositories    queries the exact repositories that a campaign spec
+	                      will apply to
+	validate              validates a campaign spec
 
 Use "src campaigns [command] -h" for more information about a command.
 
