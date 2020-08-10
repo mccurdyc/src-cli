@@ -47,13 +47,38 @@ Examples go here
 			return err
 		}
 
+		tmpl, err := parseTemplate(campaignsRepositoriesTemplate)
+		if err != nil {
+			return err
+		}
+
 		for _, on := range spec.On {
 			repos, err := svc.ResolveRepositories(ctx, &on)
 			if err != nil {
 				return err
 			}
+
+			max := 0
 			for _, repo := range repos {
-				fmt.Fprintf(out, "%s\t%s\n", repo.ID, repo.Name)
+				if len(repo.Name) > max {
+					max = len(repo.Name)
+				}
+			}
+
+			if err := execTemplate(tmpl, struct {
+				Max                 int
+				Query               string
+				RepoCount           int
+				Repos               []*campaigns.Repository
+				SourcegraphEndpoint string
+			}{
+				Max:                 max,
+				Query:               on.Label(),
+				RepoCount:           len(repos),
+				Repos:               repos,
+				SourcegraphEndpoint: cfg.Endpoint,
+			}); err != nil {
+				return err
 			}
 		}
 
@@ -71,3 +96,22 @@ Examples go here
 		},
 	})
 }
+
+const campaignsRepositoriesTemplate = `
+{{- color "logo" -}}✱{{- color "nc" -}}
+{{- " " -}}
+{{- if eq .RepoCount 0 -}}
+    {{- color "warning" -}}
+{{- else -}}
+    {{- color "success" -}}
+{{- end -}}
+{{- .RepoCount }} result{{ if ne .RepoCount 1 }}s{{ end }}{{- color "nc" -}}
+{{- " for " -}}{{- color "search-query"}}"{{.Query}}"{{color "nc"}}{{"\n" -}}
+
+{{- range .Repos -}}
+    {{- "  "}}{{ color "success" }}{{ padRight .Name $.Max " " }}{{ color "nc" -}}
+    {{- color "search-border"}}{{" ("}}{{color "nc" -}}
+    {{- color "search-repository"}}{{$.SourcegraphEndpoint}}{{.URL}}{{color "nc" -}}
+    {{- color "search-border"}}{{")\n"}}{{color "nc" -}}
+{{- end -}}
+`

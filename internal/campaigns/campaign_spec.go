@@ -1,6 +1,8 @@
 package campaigns
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	"github.com/xeipuuv/gojsonschema"
@@ -90,6 +92,16 @@ func (spec *CampaignSpec) Validate() error {
 		errs = multierror.Append(errs, errors.New(verr.String()))
 	}
 	return errs
+}
+
+func (on *OnQueryOrRepository) Label() string {
+	if on.RepositoriesMatchingQuery != "" {
+		return on.RepositoriesMatchingQuery
+	} else if on.Repository != "" {
+		return "r:" + on.Repository
+	}
+
+	return fmt.Sprintf("%v", *on)
 }
 
 // TODO: don't hardcode this; we can get it from the Sourcegraph server. (Well,
