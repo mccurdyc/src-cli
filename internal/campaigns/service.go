@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"regexp"
 
 	"github.com/pkg/errors"
 	"github.com/sourcegraph/src-cli/internal/api"
@@ -127,16 +128,33 @@ func (svc *Service) resolveRepositorySearch(ctx context.Context, query string) (
 		}
 	}
 	if ok, err := svc.client.NewRequest(repositorySearchQuery, map[string]interface{}{
-		"query": query,
+		"query": setDefaultQueryCount(query),
 	}).Do(ctx, &result); err != nil || !ok {
 		return nil, err
 	}
 
+	ids := map[string]struct{}{}
 	var repos []*Repository
 	for _, r := range result.Search.Results.Results {
-		repos = append(repos, &r.Repository)
+		if _, ok := ids[r.ID]; !ok {
+			repo := r.Repository
+			repos = append(repos, &repo)
+			ids[r.ID] = struct{}{}
+		}
 	}
 	return repos, nil
+}
+
+var defaultQueryCountRegex = regexp.MustCompile(`\bcount:\d+\b`)
+
+const hardCodedCount = " count:999999"
+
+func setDefaultQueryCount(query string) string {
+	if defaultQueryCountRegex.MatchString(query) {
+		return query
+	}
+
+	return query + hardCodedCount
 }
 
 type searchResult struct {
