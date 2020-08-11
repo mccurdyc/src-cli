@@ -52,6 +52,9 @@ Examples go here
 			return err
 		}
 
+		seen := map[string]*campaigns.Repository{}
+		final := []*campaigns.Repository{}
+		finalMax := 0
 		for _, on := range spec.On {
 			repos, err := svc.ResolveRepositories(ctx, &on)
 			if err != nil {
@@ -63,26 +66,36 @@ Examples go here
 				if len(repo.Name) > max {
 					max = len(repo.Name)
 				}
+
+				if _, ok := seen[repo.ID]; !ok {
+					seen[repo.ID] = repo
+					final = append(final, repo)
+				}
 			}
 
-			if err := execTemplate(tmpl, struct {
-				Max                 int
-				Query               string
-				RepoCount           int
-				Repos               []*campaigns.Repository
-				SourcegraphEndpoint string
-			}{
-				Max:                 max,
-				Query:               on.Label(),
-				RepoCount:           len(repos),
-				Repos:               repos,
-				SourcegraphEndpoint: cfg.Endpoint,
-			}); err != nil {
-				return err
+			if max > finalMax {
+				finalMax = max
+			}
+
+			if *verbose {
+				if err := execTemplate(tmpl, campaignsRepositoryTemplateInput{
+					Max:                 max,
+					Query:               on.Label(),
+					RepoCount:           len(repos),
+					Repos:               repos,
+					SourcegraphEndpoint: cfg.Endpoint,
+				}); err != nil {
+					return err
+				}
 			}
 		}
 
-		return nil
+		return execTemplate(tmpl, campaignsRepositoryTemplateInput{
+			Max:                 finalMax,
+			RepoCount:           len(final),
+			Repos:               final,
+			SourcegraphEndpoint: cfg.Endpoint,
+		})
 	}
 
 	campaignsCommands = append(campaignsCommands, &command{
@@ -106,7 +119,10 @@ const campaignsRepositoriesTemplate = `
     {{- color "success" -}}
 {{- end -}}
 {{- .RepoCount }} result{{ if ne .RepoCount 1 }}s{{ end }}{{- color "nc" -}}
-{{- " for " -}}{{- color "search-query"}}"{{.Query}}"{{color "nc"}}{{"\n" -}}
+{{- if ne (len .Query) 0 -}}
+    {{- " for " -}}{{- color "search-query"}}"{{.Query}}"{{ color "nc" -}}
+{{- end -}}
+{{- "\n" -}}
 
 {{- range .Repos -}}
     {{- "  "}}{{ color "success" }}{{ padRight .Name $.Max " " }}{{ color "nc" -}}
@@ -115,3 +131,11 @@ const campaignsRepositoriesTemplate = `
     {{- color "search-border"}}{{")\n"}}{{color "nc" -}}
 {{- end -}}
 `
+
+type campaignsRepositoryTemplateInput struct {
+	Max                 int
+	Query               string
+	RepoCount           int
+	Repos               []*campaigns.Repository
+	SourcegraphEndpoint string
+}
