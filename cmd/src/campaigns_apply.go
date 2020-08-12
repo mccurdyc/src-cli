@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"runtime"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"github.com/sourcegraph/src-cli/internal/api"
 	"github.com/sourcegraph/src-cli/internal/campaigns"
 )
 
@@ -18,9 +22,12 @@ Examples go here
 	flagSet := flag.NewFlagSet("apply", flag.ExitOnError)
 	var (
 		fileFlag        = flagSet.String("f", "", "The campaign spec file to read.")
+		keepFlag        = flagSet.Bool("keep-logs", false, "Retain logs after executing steps.")
 		namespaceFlag   = flagSet.String("namespace", "", "The user or organization namespace to place the campaign within.")
 		parallelismFlag = flagSet.Int("j", 0, "The maximum number of parallel jobs. (Default: GOMAXPROCS.)")
 		previewFlag     = flagSet.Bool("preview", false, "Display a preview URL for the campaign after applying the campaign spec.")
+		timeoutFlag     = flagSet.Duration("timeout", 60*time.Minute, "The maximum duration a single set of campaign steps can take.")
+		apiFlags        = api.NewFlags(flagSet)
 	)
 
 	handler := func(args []string) error {
@@ -28,13 +35,15 @@ Examples go here
 			return err
 		}
 
+		ctx := context.Background()
+		client := cfg.apiClient(apiFlags, flagSet.Output())
+		out := flagSet.Output()
+
 		// Parse flags and build up our service options.
 		var errs *multierror.Error
-		opts := &campaigns.ServiceOpts{
-			ServiceExecutorOpts: campaigns.ServiceExecutorOpts{
-				ExecutorOpts: campaigns.ExecutorOpts{},
-			},
-		}
+		svc := campaigns.NewService(&campaigns.ServiceOpts{
+			Client: client,
+		})
 
 		specFile, err := campaignsOpenFileFlag(fileFlag)
 		if err != nil {
@@ -47,11 +56,16 @@ Examples go here
 			errs = multierror.Append(errs, &usageError{errors.New("a namespace must be provided with -namespace")})
 		}
 
-		if parallelismFlag != nil || *parallelismFlag <= 0 {
-			opts.ServiceExecutorOpts.Parallelism = runtime.GOMAXPROCS(0)
-		} else {
-			opts.ServiceExecutorOpts.Parallelism = *parallelismFlag
+		opts := campaigns.ExecutorOpts{
+			KeepLogs: *keepFlag,
+			Timeout:  *timeoutFlag,
 		}
+		if parallelismFlag != nil || *parallelismFlag <= 0 {
+			opts.Parallelism = runtime.GOMAXPROCS(0)
+		} else {
+			opts.Parallelism = *parallelismFlag
+		}
+		executor := svc.NewExecutor(opts, nil)
 
 		if previewFlag == nil || !*previewFlag {
 		}
@@ -60,15 +74,34 @@ Examples go here
 			return errs
 		}
 
-		svc := campaigns.NewService(opts)
+		applyStatus(out, "  ", ansiColors["warning"], "parsing campaign spec")
 		campaignSpec, err := svc.ParseCampaignSpec(specFile)
 		if err != nil {
 			return errors.Wrap(err, "parsing campaign spec")
 		}
 
-		out := flagSet.Output()
 		if err := campaignsValidateSpec(out, campaignSpec); err != nil {
 			return err
+		}
+		applyStatus(out, "  ", ansiColors["success"], "campaign spec parsed and validated")
+
+		applyStatus(out, "  ", ansiColors["warning"], "resolving repositories")
+		repos, err := svc.ResolveRepositories(ctx, campaignSpec)
+		if err != nil {
+			return err
+		}
+		plural := "ies"
+		if len(repos) == 1 {
+			plural = "y"
+		}
+		applyStatus(out, "  ", ansiColors["success"], "%d repositor%s resolved", len(repos), plural)
+
+		specs, err := svc.ExecuteCampaignSpec(ctx, executor, campaignSpec)
+		if err != nil {
+			return err
+		}
+		for _, spec := range specs {
+			fmt.Fprintln(out, *spec)
 		}
 
 		return nil
@@ -83,4 +116,12 @@ Examples go here
 			fmt.Println(usage)
 		},
 	})
+}
+
+func applyStatus(w io.Writer, emoji, color, format string, a ...interface{}) {
+	if *verbose {
+		fmt.Fprintf(w, "%s%s", emoji, color)
+		fmt.Fprintf(w, format, a...)
+		fmt.Fprintln(w, ansiColors["nc"])
+	}
 }

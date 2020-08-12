@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/jig/teereadcloser"
@@ -26,6 +27,9 @@ type Client interface {
 
 	// NewRequest creates a GraphQL request.
 	NewRequest(query string, vars map[string]interface{}) Request
+
+	// NewRawRequest creates a raw HTTP request.
+	NewRawRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error)
 }
 
 // Request instances represent GraphQL requests.
@@ -105,8 +109,33 @@ func (c *client) NewRequest(query string, vars map[string]interface{}) Request {
 	}
 }
 
-func (c *client) url() string {
-	return c.opts.Endpoint + "/.api/graphql"
+func (c *client) NewRawRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.url(url), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.opts.AccessToken != "" {
+		req.Header.Set("Authorization", "token "+c.opts.AccessToken)
+	}
+	if *c.opts.Flags.trace {
+		req.Header.Set("X-Sourcegraph-Should-Trace", "true")
+	}
+	for k, v := range c.opts.AdditionalHeaders {
+		req.Header.Set(k, v)
+	}
+
+	return req, nil
+}
+
+const graphqlAPI = "/.api/graphql"
+
+func (c *client) graphqlURL() string {
+	return c.url(graphqlAPI)
+}
+
+func (c *client) url(relative string) string {
+	return strings.TrimRight(c.opts.Endpoint, "/") + "/" + strings.TrimLeft(relative, "/")
 }
 
 func (r *request) do(ctx context.Context, result interface{}) (bool, error) {
@@ -144,20 +173,10 @@ func (r *request) do(ctx context.Context, result interface{}) (bool, error) {
 	}
 
 	// Create the HTTP request.
-	req, err := http.NewRequestWithContext(ctx, "POST", r.client.url(), nil)
+	req, err := r.client.NewRawRequest(ctx, "POST", graphqlAPI, ioutil.NopCloser(&buf))
 	if err != nil {
 		return false, err
 	}
-	if r.client.opts.AccessToken != "" {
-		req.Header.Set("Authorization", "token "+r.client.opts.AccessToken)
-	}
-	if *r.client.opts.Flags.trace {
-		req.Header.Set("X-Sourcegraph-Should-Trace", "true")
-	}
-	for k, v := range r.client.opts.AdditionalHeaders {
-		req.Header.Set(k, v)
-	}
-	req.Body = ioutil.NopCloser(&buf)
 
 	// Perform the request.
 	resp, err := http.DefaultClient.Do(req)
@@ -252,6 +271,6 @@ func (r *request) curlCmd() (string, error) {
 		s += fmt.Sprintf("   %s \\\n", shellquote.Join("-H", k+": "+v))
 	}
 	s += fmt.Sprintf("   %s \\\n", shellquote.Join("-d", string(data)))
-	s += fmt.Sprintf("   %s", shellquote.Join(r.client.url()))
+	s += fmt.Sprintf("   %s", shellquote.Join(r.client.graphqlURL()))
 	return s, nil
 }

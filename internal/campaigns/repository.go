@@ -1,5 +1,7 @@
 package campaigns
 
+import "strings"
+
 const repositoryFieldsFragment = `
 fragment repositoryFields on Repository {
     id
@@ -34,4 +36,8 @@ func (r *Repository) BaseRef() string {
 
 func (r *Repository) Rev() string {
 	return r.DefaultBranch.Target.OID
+}
+
+func (r *Repository) Slug() string {
+	return strings.ReplaceAll(r.Name, "/", "-")
 }

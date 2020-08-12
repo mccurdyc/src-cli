@@ -55,6 +55,8 @@ type Step struct {
 	Run       string            `json:"run,omitempty" yaml:"run"`
 	Container string            `json:"container,omitempty" yaml:"container"`
 	Env       map[string]string `json:"env,omitempty" yaml:"env"`
+
+	image string
 }
 
 func ParseCampaignSpec(data []byte) (*CampaignSpec, error) {

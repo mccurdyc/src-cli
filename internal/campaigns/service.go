@@ -3,32 +3,22 @@ package campaigns
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"regexp"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sourcegraph/src-cli/internal/api"
 )
 
 type Service struct {
-	*ActionLogger
-	ServiceExecutorOpts
-
 	client api.Client
 }
 
-type ServiceExecutorOpts struct {
-	ExecutorOpts
-	Parallelism int
-}
-
 type ServiceOpts struct {
-	ServiceExecutorOpts
-
-	Client        api.Client
-	VerboseLogger bool
-	KeepLogs      bool
+	Client api.Client
 }
 
 var (
@@ -36,13 +26,48 @@ var (
 )
 
 func NewService(opts *ServiceOpts) *Service {
-	logger := NewActionLogger(opts.VerboseLogger, opts.KeepLogs)
-
 	return &Service{
-		ActionLogger:        logger,
-		client:              opts.Client,
-		ServiceExecutorOpts: opts.ServiceExecutorOpts,
+		client: opts.Client,
 	}
+}
+
+type ExecutorOpts struct {
+	Parallelism int
+	Timeout     time.Duration
+
+	ClearCache    bool
+	KeepLogs      bool
+	VerboseLogger bool
+}
+
+func (svc *Service) NewExecutor(opts ExecutorOpts, update ExecutorUpdateCallback) Executor {
+	return newExecutor(opts, svc.client, update)
+}
+
+func (svc *Service) ExecuteCampaignSpec(ctx context.Context, x Executor, spec *CampaignSpec) ([]*ChangesetSpec, error) {
+	repos, err := svc.ResolveRepositories(ctx, spec)
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving repositories")
+	}
+
+	// TODO: split into a separate function
+	// TODO: status logging
+	for i, step := range spec.Steps {
+		image, err := getDockerImageContentDigest(ctx, step.Container)
+		if err != nil {
+			return nil, errors.Wrapf(err, "step %d", i+1)
+		}
+		spec.Steps[i].image = image
+	}
+
+	fmt.Printf("steps: %+v\n", spec.Steps)
+
+	for _, repo := range repos {
+		x.AddTask(repo, spec.Steps, spec.ChangesetTemplate)
+	}
+
+	x.Start(ctx)
+	return x.Wait()
 }
 
 func (svc *Service) ParseCampaignSpec(in io.Reader) (*CampaignSpec, error) {
@@ -58,7 +83,29 @@ func (svc *Service) ParseCampaignSpec(in io.Reader) (*CampaignSpec, error) {
 	return spec, nil
 }
 
-func (svc *Service) ResolveRepositories(ctx context.Context, on *OnQueryOrRepository) ([]*Repository, error) {
+func (svc *Service) ResolveRepositories(ctx context.Context, spec *CampaignSpec) ([]*Repository, error) {
+	final := []*Repository{}
+	seen := map[string]struct{}{}
+
+	// TODO: this could be trivially parallelised in the future.
+	for _, on := range spec.On {
+		repos, err := svc.ResolveRepositoriesOn(ctx, &on)
+		if err != nil {
+			return nil, errors.Wrapf(err, "resolving %q", on.Label())
+		}
+
+		for _, repo := range repos {
+			if _, ok := seen[repo.ID]; !ok {
+				seen[repo.ID] = struct{}{}
+				final = append(final, repo)
+			}
+		}
+	}
+
+	return final, nil
+}
+
+func (svc *Service) ResolveRepositoriesOn(ctx context.Context, on *OnQueryOrRepository) ([]*Repository, error) {
 	if on.RepositoriesMatchingQuery != "" {
 		return svc.resolveRepositorySearch(ctx, on.RepositoriesMatchingQuery)
 	} else if on.Repository != "" {

@@ -52,11 +52,11 @@ Examples go here
 			return err
 		}
 
-		seen := map[string]*campaigns.Repository{}
+		seen := map[string]struct{}{}
 		final := []*campaigns.Repository{}
 		finalMax := 0
 		for _, on := range spec.On {
-			repos, err := svc.ResolveRepositories(ctx, &on)
+			repos, err := svc.ResolveRepositoriesOn(ctx, &on)
 			if err != nil {
 				return err
 			}
@@ -68,7 +68,7 @@ Examples go here
 				}
 
 				if _, ok := seen[repo.ID]; !ok {
-					seen[repo.ID] = repo
+					seen[repo.ID] = struct{}{}
 					final = append(final, repo)
 				}
 			}
