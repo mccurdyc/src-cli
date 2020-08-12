@@ -185,7 +185,7 @@ func (x *executor) do(ctx context.Context, task *Task) (err error) {
 			Title:          task.Template.Title,
 			Body:           task.Template.Body,
 			Commits: []GitCommitDescription{
-				GitCommitDescription{
+				{
 					Message: task.Template.Commit.Message,
 					Diff:    string(diff),
 				},
