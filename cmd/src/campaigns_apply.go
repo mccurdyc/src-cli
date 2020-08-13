@@ -80,7 +80,14 @@ Examples go here
 			return errs
 		}
 
-		applyStatus(out, "  ", ansiColors["warning"], "parsing campaign spec")
+		var (
+			progressColor = fg256Color(4)
+			progressEmoji = "🔄 "
+			successColor  = ansiColors["success"]
+			successEmoji  = "\u2705 "
+		)
+
+		applyStatus(out, progressEmoji, progressColor, "parsing campaign spec")
 		campaignSpec, err := svc.ParseCampaignSpec(specFile)
 		if err != nil {
 			return errors.Wrap(err, "parsing campaign spec")
@@ -89,9 +96,9 @@ Examples go here
 		if err := campaignsValidateSpec(out, campaignSpec); err != nil {
 			return err
 		}
-		applyStatus(out, "  ", ansiColors["success"], "campaign spec parsed and validated")
+		applyStatus(out, successEmoji, successColor, "campaign spec parsed and validated")
 
-		applyStatus(out, "  ", ansiColors["warning"], "resolving repositories")
+		applyStatus(out, progressEmoji, progressColor, "resolving repositories")
 		repos, err := svc.ResolveRepositories(ctx, campaignSpec)
 		if err != nil {
 			return err
@@ -100,12 +107,16 @@ Examples go here
 		if len(repos) == 1 {
 			plural = "y"
 		}
-		applyStatus(out, "  ", ansiColors["success"], "%d repositor%s resolved", len(repos), plural)
+		applyStatus(out, successEmoji, successColor, "%d repositor%s resolved", len(repos), plural)
 
+		applyStatus(out, progressEmoji, progressColor, "executing campaign spec")
 		specs, err := svc.ExecuteCampaignSpec(ctx, executor, campaignSpec)
 		if err != nil {
 			return err
 		}
+		applyStatus(out, successEmoji, successColor, "%d changeset spec(s) created", len(specs))
+
+		applyStatus(out, progressEmoji, progressColor, "creating changeset specs on Sourcegraph")
 		for _, spec := range specs {
 			fmt.Fprintln(out, *spec)
 		}

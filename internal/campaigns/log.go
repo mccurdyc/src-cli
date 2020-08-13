@@ -88,11 +88,11 @@ func (tl *TaskLogger) Close() error {
 }
 
 func (tl *TaskLogger) Log(s string) {
-	fmt.Fprintf(tl.f, "%s %s\n", time.Now(), s)
+	fmt.Fprintf(tl.f, "%s %s\n", time.Now().Format(time.RFC3339Nano), s)
 }
 
 func (tl *TaskLogger) Logf(format string, a ...interface{}) {
-	fmt.Fprintf(tl.f, "%s "+format+"\n", append([]interface{}{time.Now()}, a...)...)
+	fmt.Fprintf(tl.f, "%s "+format+"\n", append([]interface{}{time.Now().Format(time.RFC3339Nano)}, a...)...)
 }
 
 func (tl *TaskLogger) MarkErrored() {
