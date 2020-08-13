@@ -124,13 +124,13 @@ Examples go here
 		applyStatus(out, successEmoji, successColor, "%d changeset spec(s) created", len(specs))
 
 		applyStatus(out, progressEmoji, progressColor, "creating changeset specs on Sourcegraph")
-		var ids []campaigns.ChangesetSpecID
-		for _, spec := range specs {
+		ids := make([]campaigns.ChangesetSpecID, len(specs))
+		for i, spec := range specs {
 			id, err := svc.CreateChangesetSpec(ctx, spec)
 			if err != nil {
 				return err
 			}
-			ids = append(ids, id)
+			ids[i] = id
 		}
 		applyStatus(out, successEmoji, successColor, "changeset specs created: %v", ids)
 
