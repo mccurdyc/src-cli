@@ -65,7 +65,7 @@ type executor struct {
 func newExecutor(opts ExecutorOpts, client api.Client, update ExecutorUpdateCallback) *executor {
 	return &executor{
 		ExecutorOpts:  opts,
-		cache:         ExecutionNoOpCache{},
+		cache:         opts.Cache,
 		client:        client,
 		doneEnqueuing: make(chan struct{}),
 		logger:        NewLogManager(opts.KeepLogs),
@@ -143,6 +143,12 @@ func (x *executor) do(ctx context.Context, task *Task) (err error) {
 			status.ChangesetSpec = result
 			status.FinishedAt = time.Now()
 			x.updateTaskStatus(task, status)
+
+			// Add the spec to the executor's list of completed specs.
+			x.specsMu.Lock()
+			x.specs = append(x.specs, result)
+			x.specsMu.Unlock()
+
 			return
 		}
 	}

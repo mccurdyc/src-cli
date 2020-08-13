@@ -3,7 +3,6 @@ package campaigns
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"regexp"
@@ -31,7 +30,16 @@ func NewService(opts *ServiceOpts) *Service {
 	}
 }
 
+func (svc *Service) NewExecutionCache(dir string) ExecutionCache {
+	if dir == "" {
+		return &ExecutionNoOpCache{}
+	}
+
+	return &ExecutionDiskCache{dir}
+}
+
 type ExecutorOpts struct {
+	Cache       ExecutionCache
 	Parallelism int
 	Timeout     time.Duration
 
@@ -59,8 +67,6 @@ func (svc *Service) ExecuteCampaignSpec(ctx context.Context, x Executor, spec *C
 		}
 		spec.Steps[i].image = image
 	}
-
-	fmt.Printf("steps: %+v\n", spec.Steps)
 
 	for _, repo := range repos {
 		x.AddTask(repo, spec.Steps, spec.ChangesetTemplate)

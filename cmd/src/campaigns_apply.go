@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"runtime"
 	"time"
 
@@ -19,8 +21,11 @@ func init() {
 Examples go here
 `
 
+	cacheDir := defaultCacheDir()
+
 	flagSet := flag.NewFlagSet("apply", flag.ExitOnError)
 	var (
+		cacheDirFlag    = flagSet.String("cache", cacheDir, "Directory for caching results.")
 		fileFlag        = flagSet.String("f", "", "The campaign spec file to read.")
 		keepFlag        = flagSet.Bool("keep-logs", false, "Retain logs after executing steps.")
 		namespaceFlag   = flagSet.String("namespace", "", "The user or organization namespace to place the campaign within.")
@@ -57,6 +62,7 @@ Examples go here
 		}
 
 		opts := campaigns.ExecutorOpts{
+			Cache:    svc.NewExecutionCache(*cacheDirFlag),
 			KeepLogs: *keepFlag,
 			Timeout:  *timeoutFlag,
 		}
@@ -124,4 +130,13 @@ func applyStatus(w io.Writer, emoji, color, format string, a ...interface{}) {
 		fmt.Fprintf(w, format, a...)
 		fmt.Fprintln(w, ansiColors["nc"])
 	}
+}
+
+func defaultCacheDir() string {
+	uc, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+
+	return path.Join(uc, "sourcegraph", "campaigns")
 }
