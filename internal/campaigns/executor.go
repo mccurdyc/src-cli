@@ -184,7 +184,7 @@ func (x *executor) do(ctx context.Context, task *Task) (err error) {
 	spec := &ChangesetSpec{
 		BaseRepository: task.Repository.ID,
 		CreatedChangeset: &CreatedChangeset{
-			BaseRef:        "refs/heads/" + task.Repository.BaseRef(),
+			BaseRef:        task.Repository.BaseRef(),
 			BaseRev:        task.Repository.Rev(),
 			HeadRepository: task.Repository.ID,
 			HeadRef:        "refs/heads/" + task.Template.Branch,
