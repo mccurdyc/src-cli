@@ -98,6 +98,13 @@ Examples go here
 		}
 		applyStatus(out, successEmoji, successColor, "campaign spec parsed and validated")
 
+		applyStatus(out, progressEmoji, progressColor, "resolving namespace")
+		namespace, err := svc.ResolveNamespace(ctx, *namespaceFlag)
+		if err != nil {
+			return err
+		}
+		applyStatus(out, successEmoji, successColor, "resolved namespace: %s", namespace)
+
 		applyStatus(out, progressEmoji, progressColor, "resolving repositories")
 		repos, err := svc.ResolveRepositories(ctx, campaignSpec)
 		if err != nil {

@@ -89,6 +89,41 @@ func (svc *Service) ParseCampaignSpec(in io.Reader) (*CampaignSpec, error) {
 	return spec, nil
 }
 
+const namespaceQuery = `
+query NamespaceQuery($name: String!) {
+    user(username: $name) {
+        id
+    }
+
+    organization(name: $name) {
+        id
+    }
+}
+`
+
+func (svc *Service) ResolveNamespace(ctx context.Context, namespace string) (string, error) {
+	var result struct {
+		Data struct {
+			User         *struct{ ID string }
+			Organization *struct{ ID string }
+		}
+		Errors []interface{}
+	}
+	if ok, err := svc.client.NewRequest(namespaceQuery, map[string]interface{}{
+		"name": namespace,
+	}).DoRaw(ctx, &result); err != nil || !ok {
+		return "", err
+	}
+
+	if result.Data.User != nil {
+		return result.Data.User.ID, nil
+	}
+	if result.Data.Organization != nil {
+		return result.Data.Organization.ID, nil
+	}
+	return "", errors.New("no user or organization found")
+}
+
 func (svc *Service) ResolveRepositories(ctx context.Context, spec *CampaignSpec) ([]*Repository, error) {
 	final := []*Repository{}
 	seen := map[string]struct{}{}
