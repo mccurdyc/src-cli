@@ -30,6 +30,83 @@ func NewService(opts *ServiceOpts) *Service {
 	}
 }
 
+type CampaignSpecID string
+type ChangesetSpecID string
+
+const createCampaignSpecMutation = `
+mutation CreateCampaignSpec(
+    $namespace: ID!,
+    $spec: String!,
+    $changesetSpecs: [ID!]!
+) {
+    createCampaignSpec(
+        namespace: $namespace, 
+        campaignSpec: $spec,
+        changesetSpecs: $changesetSpecs
+    ) {
+        id
+        applyURL
+    }
+}
+`
+
+func (svc *Service) CreateCampaignSpec(ctx context.Context, namespace string, spec *CampaignSpec, ids []ChangesetSpecID) (CampaignSpecID, string, error) {
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return "", "", errors.Wrap(err, "marshalling campaign spec JSON")
+	}
+
+	var result struct {
+		CreateCampaignSpec struct {
+			ID       string
+			ApplyURL string
+		}
+	}
+	if ok, err := svc.client.NewRequest(createCampaignSpecMutation, map[string]interface{}{
+		"namespace":      namespace,
+		"spec":           string(raw),
+		"changesetSpecs": ids,
+	}).Do(ctx, &result); err != nil || !ok {
+		return "", "", err
+	}
+
+	return CampaignSpecID(result.CreateCampaignSpec.ID), result.CreateCampaignSpec.ApplyURL, nil
+
+}
+
+const createChangesetSpecMutation = `
+mutation CreateChangesetSpec($spec: String!) {
+    createChangesetSpec(changesetSpec: $spec) {
+        ... on HiddenChangesetSpec {
+            id
+        }
+        ... on VisibleChangesetSpec {
+            id
+        }
+    }
+}
+`
+
+func (svc *Service) CreateChangesetSpec(ctx context.Context, spec *ChangesetSpec) (ChangesetSpecID, error) {
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return "", errors.Wrap(err, "marshalling changeset spec JSON")
+	}
+
+	var result struct {
+		CreateChangesetSpec struct {
+			ID string
+		}
+	}
+	if ok, err := svc.client.NewRequest(createChangesetSpecMutation, map[string]interface{}{
+		"spec": string(raw),
+	}).Do(ctx, &result); err != nil || !ok {
+		return "", err
+	}
+
+	return ChangesetSpecID(result.CreateChangesetSpec.ID), nil
+}
+
 func (svc *Service) NewExecutionCache(dir string) ExecutionCache {
 	if dir == "" {
 		return &ExecutionNoOpCache{}

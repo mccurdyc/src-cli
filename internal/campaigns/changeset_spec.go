@@ -6,8 +6,8 @@ package campaigns
 type ChangesetSpec struct {
 	BaseRepository string `json:"baseRepository"`
 
-	ExternalChangeset
-	CreatedChangeset
+	*ExternalChangeset
+	*CreatedChangeset
 }
 
 type ExternalChangeset struct {

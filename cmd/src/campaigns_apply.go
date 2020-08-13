@@ -124,9 +124,24 @@ Examples go here
 		applyStatus(out, successEmoji, successColor, "%d changeset spec(s) created", len(specs))
 
 		applyStatus(out, progressEmoji, progressColor, "creating changeset specs on Sourcegraph")
+		var ids []campaigns.ChangesetSpecID
 		for _, spec := range specs {
-			fmt.Fprintln(out, *spec)
+			id, err := svc.CreateChangesetSpec(ctx, spec)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, id)
 		}
+		applyStatus(out, successEmoji, successColor, "changeset specs created: %v", ids)
+
+		applyStatus(out, progressEmoji, progressColor, "creating campaign spec on Sourcegraph")
+		id, url, err := svc.CreateCampaignSpec(ctx, namespace, campaignSpec, ids)
+		if err != nil {
+			return err
+		}
+		applyStatus(out, successEmoji, successColor, "campaign spec created: %s", id)
+
+		fmt.Fprintf(out, "%s%sCampaign spec created!%s\n   To apply the spec, go to:\n   %s%s\n", successEmoji, successColor, ansiColors["nc"], cfg.Endpoint, url)
 
 		return nil
 	}
