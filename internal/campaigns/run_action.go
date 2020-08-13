@@ -82,7 +82,7 @@ func runSteps(ctx context.Context, client api.Client, repo *Repository, steps []
 
 		// Set up a temporary file on the host filesystem to contain the
 		// script.
-		fp, err := ioutil.TempFile("", "")
+		fp, err := ioutil.TempFile(tempDirPrefix, "")
 		if err != nil {
 			return nil, errors.Wrap(err, "creating temporary file")
 		}
