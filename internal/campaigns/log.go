@@ -79,12 +79,6 @@ func (tl *TaskLogger) Close() error {
 		return nil
 	}
 	return nil
-
-	if err := os.Remove(tl.f.Name()); err != nil {
-		return errors.Wrapf(err, "failed to remove log file %q", tl.f.Name())
-	}
-
-	return nil
 }
 
 func (tl *TaskLogger) Log(s string) {
