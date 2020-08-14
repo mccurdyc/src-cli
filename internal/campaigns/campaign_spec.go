@@ -30,6 +30,7 @@ type CampaignSpec struct {
 	Description       string                `json:"description,omitempty" yaml:"description"`
 	On                []OnQueryOrRepository `json:"on,omitempty" yaml:"on"`
 	Steps             []Step                `json:"steps,omitempty" yaml:"steps"`
+	ImportChangesets  []ImportChangeset     `json:"importChangesets,omitempty" yaml:"importChangesets"`
 	ChangesetTemplate *ChangesetTemplate    `json:"changesetTemplate,omitempty" yaml:"changesetTemplate"`
 }
 
@@ -43,6 +44,11 @@ type ChangesetTemplate struct {
 
 type ExpandedGitCommitDescription struct {
 	Message string `json:"message,omitempty" yaml:"message"`
+}
+
+type ImportChangeset struct {
+	Repository  string        `json:"repository" yaml:"repository"`
+	ExternalIDs []interface{} `json:"externalIDs" yaml:"externalIDs"`
 }
 
 type OnQueryOrRepository struct {
@@ -191,6 +197,30 @@ const campaignSpecSchemaRaw = `{
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      }
+    },
+    "importChangesets": {
+      "type": "array",
+      "description": "Import existing changesets on code hosts.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "externalIDs"],
+        "properties": {
+          "repository": {
+            "type": "string",
+            "description": "The repository name as configured on your Sourcegraph instance."
+          },
+          "externalIDs": {
+            "type": "array",
+            "description": "The changesets to import from the code host. For GitHub this is the PR number, for GitLab this is the MR number, for Bitbucket Server this is the PR number.",
+            "uniqueItems": true,
+            "items": {
+              "oneOf": [{ "type": "string" }, { "type": "integer" }]
+            },
+            "examples": [120, "120"]
           }
         }
       }

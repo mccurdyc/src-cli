@@ -3,9 +3,12 @@ package campaigns
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"reflect"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -150,7 +153,46 @@ func (svc *Service) ExecuteCampaignSpec(ctx context.Context, x Executor, spec *C
 	}
 
 	x.Start(ctx)
-	return x.Wait()
+	specs, err := x.Wait()
+	if err != nil {
+		return nil, errors.Wrap(err, "executing campaign spec")
+	}
+
+	// Add external changeset specs.
+	for _, ic := range spec.ImportChangesets {
+		repo, err := svc.resolveRepositoryName(ctx, ic.Repository)
+		if err != nil {
+			return nil, errors.Wrapf(err, "resolving repository name %q", ic.Repository)
+		}
+
+		fmt.Println(*repo)
+
+		for _, id := range ic.ExternalIDs {
+			var sid string
+
+			switch tid := id.(type) {
+			case string:
+				sid = tid
+			case int, int8, int16, int32, int64:
+				sid = strconv.FormatInt(reflect.ValueOf(id).Int(), 10)
+			case uint, uint8, uint16, uint32, uint64:
+				sid = strconv.FormatUint(reflect.ValueOf(id).Uint(), 10)
+			case float32:
+				sid = strconv.FormatFloat(float64(tid), 'f', -1, 32)
+			case float64:
+				sid = strconv.FormatFloat(tid, 'f', -1, 64)
+			default:
+				return nil, errors.Errorf("cannot convert value of type %T into a valid external ID: expected string or int", id)
+			}
+
+			specs = append(specs, &ChangesetSpec{
+				BaseRepository:    repo.ID,
+				ExternalChangeset: &ExternalChangeset{sid},
+			})
+		}
+	}
+
+	return specs, nil
 }
 
 func (svc *Service) ParseCampaignSpec(in io.Reader) (*CampaignSpec, error) {
@@ -252,13 +294,16 @@ query Repository(
 ` + repositoryFieldsFragment
 
 func (svc *Service) resolveRepositoryName(ctx context.Context, name string) (*Repository, error) {
-	var result struct{ Repository Repository }
+	var result struct{ Repository *Repository }
 	if ok, err := svc.client.NewRequest(repositoryNameQuery, map[string]interface{}{
 		"name": name,
 	}).Do(ctx, &result); err != nil || !ok {
 		return nil, err
 	}
-	return &result.Repository, nil
+	if result.Repository == nil {
+		return nil, errors.New("no repository found")
+	}
+	return result.Repository, nil
 }
 
 // TODO: search result alerts.
